@@ -6,7 +6,7 @@ on:
       - main
     tags:
       - 'v*.*.*'
-    paths-ignore:
+   
       - 'README.md'
 
   workflow_run:
@@ -71,9 +71,17 @@ jobs:
           pytest --cov
           pytest --flake8
 
-  build-and-push:
+  integration-tests:
     runs-on: ubuntu-latest
     needs: additional-tests
+
+    steps:
+      - name: Run integration tests
+        run: pytest tests/integration
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: integration-tests
     permissions:
       contents: read
       packages: write
@@ -142,3 +150,19 @@ jobs:
             docker-compose pull &&
             docker-compose up -d --build
           "
+
+  ssh-test:
+    runs-on: ubuntu-latest
+    needs: additional-tests
+
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Test SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'"
