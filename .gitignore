@@ -2,7 +2,8 @@
 bot_database.sqlite3
 
 # Игнорировать файлы окружения
-.env
+.env.local
+.env.github.actions.local
 
 # Игнорировать кэш Python
 __pycache__/
