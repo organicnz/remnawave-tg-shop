@@ -26,7 +26,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREVIOUS_RUN_ID=$(gh api repos/${{ github.repository }}/actions/runs --jq ".workflow_runs | map(select(.head_branch == \"${{ github.ref_name }}\" and .status == \"in_progress\")) | .[0].id")
+          CURRENT_RUN_ID=${{ github.run_id }}
+          PREVIOUS_RUN_ID=$(gh api repos/${{ github.repository }}/actions/runs --jq ".workflow_runs | map(select(.head_branch == \"${{ github.ref_name }}\" and .status == \"in_progress\" and .id != $CURRENT_RUN_ID)) | .[0].id")
           if [ -n "$PREVIOUS_RUN_ID" ]; then
             gh api repos/${{ github.repository }}/actions/runs/$PREVIOUS_RUN_ID/cancel -X POST
           fi
