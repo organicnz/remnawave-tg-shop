@@ -9,10 +9,17 @@ on:
     paths-ignore:
       - 'README.md'
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   cancel-previous-runs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    permissions:
+      actions: write
+      contents: read
 
     steps:
       - name: Cancel Previous Runs
