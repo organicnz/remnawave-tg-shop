@@ -9,9 +9,25 @@ on:
     paths-ignore:
       - 'README.md'
 
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types:
+      - requested
+
 jobs:
+  cancel-previous-runs:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@v0.11.0
+        with:
+          access_token: ${{ secrets.GITHUB_TOKEN }}
+
   checkout:
     runs-on: ubuntu-latest
+    needs: cancel-previous-runs
 
     steps:
       - name: Checkout repository
