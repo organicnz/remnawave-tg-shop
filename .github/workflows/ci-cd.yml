@@ -16,9 +16,26 @@ jobs:
 
     steps:
       - name: Cancel Previous Runs
-        uses: github/cancel-workflow-action@v0.9.1
+        uses: actions/github-script@v6
         with:
-          access_token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { Octokit } = require("@octokit/rest");
+            const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+            const runs = await octokit.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: context.workflow,
+              status: "in_progress",
+            });
+            for (const run of runs.data.workflow_runs) {
+              if (run.id !== context.runId) {
+                await octokit.actions.cancelWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id,
+                });
+              }
+            }
 
   checkout:
     runs-on: ubuntu-latest
