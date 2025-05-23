@@ -6,13 +6,8 @@ on:
       - main
     tags:
       - 'v*.*.*'
-   
+    paths-ignore:
       - 'README.md'
-
-  workflow_run:
-    workflows: ["CI/CD Pipeline"]
-    types:
-      - requested
 
 jobs:
   cancel-previous-runs:
