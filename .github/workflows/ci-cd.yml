@@ -101,14 +101,26 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Pull repository on server
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_DIRECTORY: ${{ secrets.DEPLOY_DIRECTORY }}
+        run: |
+          ssh $VPS_USER@$VPS_HOST "
+            if [ ! -d \"$DEPLOY_DIRECTORY\" ]; then
+              git clone https://github.com/${{ github.repository }} $DEPLOY_DIRECTORY;
+            else
+              cd $DEPLOY_DIRECTORY && git pull;
+            fi
+          "
+
       - name: Deploy to server
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           DEPLOY_DIRECTORY: ${{ secrets.DEPLOY_DIRECTORY }}
         run: |
-          ssh $VPS_USER@$VPS_HOST "mkdir -p $DEPLOY_DIRECTORY"
-          rsync -avz --exclude='.git' ./ $VPS_USER@$VPS_HOST:$DEPLOY_DIRECTORY
           ssh $VPS_USER@$VPS_HOST "
             cd $DEPLOY_DIRECTORY &&
             docker-compose pull &&
