@@ -20,17 +20,24 @@ jobs:
     permissions:
       actions: write
       contents: read
-
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Ensure GitHub CLI is installed
+        run: |
+          if ! command -v gh &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y gh
+          fi
       - name: Cancel Previous Runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           CURRENT_RUN_ID=${{ github.run_id }}
-          PREVIOUS_RUN_ID=$(gh api repos/${{ github.repository }}/actions/runs --jq ".workflow_runs | map(select(.head_branch == \"${{ github.ref_name }}\" and .status == \"in_progress\" and .id != $CURRENT_RUN_ID)) | .[0].id")
-          if [ -n "$PREVIOUS_RUN_ID" ]; then
-            gh api repos/${{ github.repository }}/actions/runs/$PREVIOUS_RUN_ID/cancel -X POST
-          fi
+          RUNS=$(gh api repos/${{ github.repository }}/actions/runs --jq ".workflow_runs | map(select(.head_branch == \"${{ github.ref_name }}\" and .status == \"in_progress\" and .id != $CURRENT_RUN_ID)) | .[].id")
+          for RUN_ID in $RUNS; do
+            gh api repos/${{ github.repository }}/actions/runs/$RUN_ID/cancel -X POST
+          done
 
   checkout:
     runs-on: ubuntu-latest
@@ -53,19 +60,20 @@ jobs:
   install-dependencies:
     runs-on: ubuntu-latest
     needs: setup-python
-
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Check if requirements.txt exists
         run: |
           if [ ! -f requirements.txt ]; then
-            echo "requirements.txt not found. Skipping dependency installation."
-            exit 0
+            echo "requirements.txt not found. Failing early."
+            exit 1
           fi
-
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade --user pip
-          pip install --user -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
   run-tests:
     runs-on: ubuntu-latest
@@ -88,8 +96,16 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     needs: additional-tests
-
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Check if integration tests directory exists
+        run: |
+          if [ ! -d tests/integration ]; then
+            echo "No integration tests directory found. Skipping."
+            exit 0
+          fi
       - name: Run integration tests
         run: pytest tests/integration
 
@@ -127,10 +143,12 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
 
-  deploy:
+  ssh-test:
     runs-on: ubuntu-latest
-    needs: build-and-push
-
+    needs: additional-tests
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Set up SSH
         run: |
@@ -138,7 +156,23 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+      - name: Test SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'"
 
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
       - name: Pull repository on server
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -152,7 +186,6 @@ jobs:
               cd $DEPLOY_DIRECTORY && git pull;
             fi
           "
-
       - name: Deploy to server
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -165,18 +198,4 @@ jobs:
             docker-compose up -d --build
           "
 
-  ssh-test:
-    runs-on: ubuntu-latest
-    needs: additional-tests
-
-    steps:
-      - name: Set up SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Test SSH connection
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'SSH connection successful'"
+# Reminder: Ensure all required secrets (SSH_PRIVATE_KEY, VPS_HOST, VPS_USER, DEPLOY_DIRECTORY) are set in your repository settings.
